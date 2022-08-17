@@ -1,0 +1,135 @@
+{
+    "covers":[
+        {
+            "name": "Devin", 
+            "path": "./covers/2kCoverDevin.jpg",
+            "pathMugShot": "./covers/DevinMugShot.jpg",
+            "location": [
+                325,150,455,325
+            ],
+            "mugShotLocation":[
+                325,60,645,455
+            ],
+            "emb": "None"
+        },
+        {
+            "name": "Devin",
+            "path": "./covers/2kCover_no_beard.jpg",
+            "pathMugShot": "./covers/DevinMugShot.jpg",
+            "location": [
+                325,150,455,325
+            ],
+            "mugShotLocation":[
+                325,60,645,400
+            ],
+            "emb": "None"
+        },
+        {
+            "name": "RealDevin",
+            "path": "./covers/DevinMugShot.jpg",
+            "pathMugShot": "./covers/DevinMugShot.jpg",
+            "location": [
+                325,60,645,400
+            ],
+            "mugShotLocation":[
+                325,60,645,400
+            ],
+            "emb": "None"
+        },
+        
+
+        {
+            "name": "Diana",
+            "path": "./covers/2kCoverDual.jpg",
+            "pathMugShot": "./covers/DianaMugShot.jpg",
+            "location": [
+                420,220,715,605
+            ],
+            "mugShotLocation": [
+                220,115,825,960
+            ],
+            "emb": "None"
+        },
+        {
+            "name": "Sue",
+            "path": "./covers/2kCoverDual.jpg",
+            "pathMugShot": "./covers/SueMugShot.jpg",
+            "location": [
+                915,330,1185,695
+            ],
+            "mugShotLocation": [
+                300,230,660,770
+            ],
+            "emb": "None"
+        }
+
+    ],
+    "testing":[
+        {
+            "name": "DevinLayUp",
+            "path": "./covers/2kCoverLayUp.jpg",
+            "location": [
+                170,95,200,133
+            ],
+            "emb": "None"
+        }
+    ],
+    "covers2":[
+        {
+            "name": "Devin",
+            "path": "./covers/2kCoverDevin.jpg",
+            "location": [
+                325,150,450,320
+            ],
+            
+            "emb": "None"
+        },
+        {
+            "name": "Devin",
+            "path": "./covers/2kCover_no_beard.jpg",
+            "pathMugShot": "./covers/DevinMugShot.jpg",
+            "location": [
+                325,150,455,325
+            ],
+            "mugShotLocation":[
+                325,60,645,400
+            ],
+            "emb": "None"
+        },
+        {
+            "name": "WhiteDevin",
+            "path": "./covers/2kWhiteDevin.jpg",
+            "location": [
+                325,150,450,320
+            ],
+            "emb": "None"
+        },
+
+        {
+            "name": "Diana",
+            "path": "./covers/2kCoverDual.jpg",
+            "location": [
+                420,220,710,600
+            ],
+            "emb": "None"
+        },
+        {
+            "name": "Sue",
+            "path": "./covers/2kCoverDual.jpg",
+            "location": [
+                915,330,1180,690
+            ],
+            "emb": "None"
+        },
+        {
+            "name": "Devin",
+            "path": "./covers/2kCover_no_beard.jpg",
+            "location": [
+                325,150,455,325
+            ],
+            "emb": "None"
+        }
+
+    ]
+
+}
