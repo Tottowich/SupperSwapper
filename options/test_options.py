@@ -62,6 +62,7 @@ class CoverOptions(BaseOptions):
         self.parser.add_argument('--gpu_id', type=int, default=0, help='gpu id')
         self.parser.add_argument('--enhance_face', action='store_true', help='Use GFPGAN to enhance face')
         self.parser.add_argument('--enhance_background', type=bool, default=False, help='enhance background')
+        self.parser.add_argument('--mug_shot', type=bool, default=True, help='Use mug shot to get features of the covers')
         self.parser.add_argument('-o', '--output', type=str, default='results', help='Output folder')
         
         self.parser.add_argument('--ntest', type=int, default=float("inf"), help='# of test examples.')

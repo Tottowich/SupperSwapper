@@ -97,6 +97,7 @@ class SuperSwapper:
         self.enhance_background = enhance_background
         self.config_path = config_path
         self.best_match_index = match_index
+        self.DF = DeepFace
         self.tf = transforms.Compose([
                     #transforms.ToTensor(),
                     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -105,7 +106,7 @@ class SuperSwapper:
         self.face_detect_crop = self.initializeFaceDetector() # Initialize the detector which detects and aligns the faces.
         targets = self.loadTargets(self.config_path) # Dictionary of targets
         self.find_best_match = True # Whether to find the best match or not
-        self.target_crops,self.target_cut_outs,self.full_covers,self.locations,self.is_embeddings = self.dictToTensor(targets) # Convert the provided backgrounds to tensors.s
+        self.target_crops,self.target_cut_outs,self.full_covers,self.locations,self.is_embeddings,self.embeddings = self.dictToArrays(targets) # Convert the provided backgrounds to tensors.s
         #self.target_crops,self.target_cut_outs,self.full_covers,self.locations,self.targets_encoding = self._dictToTensor(targets) # Convert the provided backgrounds to tensors.s 
         self.swapper = Swap(opt=options,
                             model_path=swap_model_path,
@@ -115,7 +116,7 @@ class SuperSwapper:
         self.attr_model = ResNetAttributes(version=attr_version,
                                             pretrained=True,
                                             model_path=self.attr_model_path,
-                                            device=self.device).eval() # Initialize the attribute detection model. This is used to match the input image to the best target image.
+                                            device=self.device).eval().to("cpu") # Initialize the attribute detection model. This is used to match the input image to the best target image.
 
         
     @torch.no_grad()
@@ -151,12 +152,14 @@ class SuperSwapper:
             if self.opt.visualize_crop or self.opt.show_final:
                 Image.fromarray(merged_img).show(title="Merged Faces, with enhancement and correct background")
             return merged_img,target_cut_out
+        self.attr_model.to("cpu")
+        self.swapper.model.to("cpu")
         _, _, output = self.face_enhancer.enhance(cv2.cvtColor(merged_img,cv2.COLOR_RGB2BGR), has_aligned=False, only_center_face=False, paste_back=True)
         output_rgb = cv2.cvtColor(output,cv2.COLOR_BGR2RGB)
         if self.opt.visualize_crop or self.opt.show_final:
             Image.fromarray(source_crop).show(title="Merged Faces, with enhancement and correct background")
             Image.fromarray(output_rgb).show(title="Merged Faces, with enhancement and correct background")
-            Image.fromarray(increaseContrast(output_rgb,factor=.8)).show(title="Merged Faces, with enhancement and correct background")
+            #Image.fromarray(increaseContrast(output_rgb,factor=.8)).show(title="Merged Faces, with enhancement and correct background")
 
         return output_rgb,target_cut_out,merged_img
 
@@ -174,7 +177,9 @@ class SuperSwapper:
     def findTarget(self,
                     source_crop:np.ndarray,
                     target_crops:np.ndarray,
-                    target_cut_outs:np.ndarray)->np.ndarray:
+                    target_cut_outs:list)->np.ndarray:
+        # print(f"Types: {type(source_crop)}, {type(target_crops)}, {type(target_cut_outs)}")
+        # print(f"Shapes: {source_crop.shape}, {target_crops.shape}, {target_cut_outs.shape}")
         """
         Finds the target image that is most similar to the source image in order to generate the best swapping results.
         """
@@ -182,6 +187,17 @@ class SuperSwapper:
         
         if not self.is_embeddings:
             # Stack attr_input and targets for computational efficiency.
+            # plt.imshow(target_crops[0]/255)
+            # plt.show()
+            # print(f"type: {type(target_cut_outs[0])}")
+            # print(f"shape: {target_cut_outs[0].shape}")
+            # start = time.time()
+            # cv2.imshow("Source",source_crop*255)
+            # cv2.waitKey(0)
+            # embeddings = np.array([self.DF.represent(cv2.cvtColor(cut_out,cv2.COLOR_RGB2BGR),enforce_detection=False) for cut_out in target_cut_outs])
+            # end = time.time()
+            # print(f"Time to compute embeddings: {end-start:4e}")
+            # print(f"Embeddings shape: {embeddings.shape}")
             input_target_stack = torch.cat((self.tf(torch.Tensor(source_crop)[None].permute(0,3,1,2)),self.tf(torch.Tensor(target_crops).permute(0,3,1,2))),dim=0).to(self.device)
             # Find best match:
             self.feature_embeddings = self.attr_model(input_target_stack)
@@ -192,13 +208,30 @@ class SuperSwapper:
             print(f"Input features: {translate(input_embedding,threshold=0.5)}")
             print(f"Target features: {translate(target_embedding[self.best_match_index],threshold=0.5)}")
             target_img = target_cut_outs[self.best_match_index]
+            print(f"Best match index: {self.best_match_index}")
+
         else:
-            raise NotImplementedError
+            # Find best match:
+            # input_target_stack = torch.cat((self.tf(torch.Tensor(source_crop)[None].permute(0,3,1,2)),self.tf(torch.Tensor(target_crops).permute(0,3,1,2))),dim=0).to(self.device)
+            # self.feature_embeddings = self.attr_model(input_target_stack)
+            cv2.imshow("Source",source_crop)
+            cv2.waitKey(0)
+            try:
+                input_embedding = self.DF.represent(cv2.cvtColor(source_crop,cv2.COLOR_RGB2BGR))
+            except:
+                raise Exception("Source image poor quality")
+            target_embedding = self.embeddings
+            # If the wanted background match is not provided, select the one which is closest to the input image in the output space, R40.
+            self.best_match_index = torch.argmin(torch.sum((target_embedding - input_embedding)**2,dim=1)) if self.best_match_index is None else self.best_match_index
+            print(f"Input features: {translate(input_embedding,threshold=0.5)}")
+            print(f"Target features: {translate(target_embedding[self.best_match_index],threshold=0.5)}")
+            target_img = target_cut_outs[self.best_match_index]
+            print(f"Best match index: {self.best_match_index}")
             # input_attr = self.attr_model(self.attr_input)
             # input_attr = input_attr.view(input_attr.size(0), -1)
             # self.target_index = torch.argmin(torch.norm(input_attr - targets, p=2, dim=1))
         return target_img
-    def dictToTensor(self,target_dict:dict)->Tuple[torch.Tensor,list,list,list,bool]:
+    def dictToArrays(self,target_dict:dict)->Tuple[np.ndarray,np.ndarray,list,list,bool]:
         """
         Returns a tensor of the target images and a boolean indicating if the target images are embeddings or not
         These target images are cut out of the various covers.
@@ -208,18 +241,15 @@ class SuperSwapper:
             list of the cut out images,
             bool indicating whether the target images are embeddings or not. 
         """
-        is_embeddings = False
+        is_embeddings = True
         covers = target_dict["covers"] # List of cover dict containing "name", "path" to image and "location" of the face in the image. Might contain "emb" for face embeddings.
                                         # "location" is a list of [x0,y0,x1,y1]
         targets = []
         full_covers = []
         target_cut_outs = []
+        embeddings = []
         locations = []
         for cover in covers:
-            # if cover["emb"] != "None":
-            #     is_embeddings = True
-            #     targets.append(np.load(cover["emb"]))
-            #     continue
             image_path = os.path.join(self.config_path,cover["path"])
             face_loc = cover["location"]
             locations.append(face_loc)
@@ -227,12 +257,15 @@ class SuperSwapper:
             full_covers.append(full_cover)
             face_cut = getCutOut(face_loc[0],face_loc[1],face_loc[2],face_loc[3],full_cover)
             target_cut_outs.append(face_cut)
+            embeddings.append(self.DF.represent(cv2.cvtColor(face_cut,cv2.COLOR_RGB2BGR),enforce_detection=False))
             face_cut,_ = self.face_detect_crop.get(face_cut, self.swap_crop_size) # Crop and align face to crop_size
             targets.append(face_cut[0])
-            plt.imshow(target_cut_outs[-1])
-            plt.show()
-            
-        return torch.Tensor(np.array(targets)), target_cut_outs,full_covers,locations,is_embeddings, # Return tensor of shape (n_targets,crop_size,crop_size,3) and boolean indicating if the target images are embeddings or not
+            # print("\n",analysis)
+            # plt.imshow(target_cut_outs[-1])
+            # plt.show()
+
+        
+        return np.array(targets), target_cut_outs,full_covers,locations,is_embeddings,np.array(embeddings) # Return tensor of shape (n_targets,crop_size,crop_size,3) and boolean indicating if the target images are embeddings or not
     def _dictToTensor(self,target_dict:dict)->Tuple[torch.Tensor,list,list,list,bool]:
         """
         Returns a tensor of the target images and a boolean indicating if the target images are embeddings or not
@@ -252,10 +285,6 @@ class SuperSwapper:
         locations = []
         face_encodings = []
         for cover in covers:
-            # if cover["emb"] != "None":
-            #     is_embeddings = True
-            #     targets.append(np.load(cover["emb"]))
-            #     continue
             image_path = os.path.join(self.config_path,cover["path"])
             
             face_loc = cover["location"]
@@ -264,22 +293,21 @@ class SuperSwapper:
             full_covers.append(full_cover)
             face_cut = getCutOut(face_loc[0],face_loc[1],face_loc[2],face_loc[3],full_cover).astype(np.uint8)
             target_cut_outs.append(face_cut)
-            mug_shot_path = os.path.join(self.config_path,cover["pathMugShot"])
-            print(f"Mug shot path: {mug_shot_path}")
-            mug_shot_img = readImg(mug_shot_path).astype(np.uint8)
-            #mug_shot_img = resizeImage(mug_shot_img,(512,512))
-            mug_shot_location = cover["mugShotLocation"]
-            mug_shot_cut = getCutOut(mug_shot_location[0],mug_shot_location[1],mug_shot_location[2],mug_shot_location[3],mug_shot_img)
-            plt.imshow(mug_shot_cut)
-            plt.show()
-            #face_location = face_recognition.face_locations(mug_shot_img)[0]
-            #print(face_location)
+            # print(f"Mug shot path: {mug_shot_path}")
+            if self.opt.mug_shot:
+                mug_shot_path = os.path.join(self.config_path,cover["pathMugShot"])
+                mug_shot_img = readImg(mug_shot_path).astype(np.uint8)
+                mug_shot_location = cover["mugShotLocation"]
+                mug_shot_cut = getCutOut(mug_shot_location[0],mug_shot_location[1],mug_shot_location[2],mug_shot_location[3],mug_shot_img)
+                plt.imshow(mug_shot_cut)
+                plt.show()
+                encodings = face_recognition.face_encodings(mug_shot_img)
+            else:
+                encodings = face_recognition.face_encodings(face_cut)
             
-            encodings = face_recognition.face_encodings(mug_shot_img)
             face_cut,_ = self.face_detect_crop.get(face_cut, self.swap_crop_size) # Crop and align face to crop_size
             encodings = encodings[0]
-            # x0,y0,x1,y1 = face_location[0][:4]
-            # Image.fromarray(mug_shot_img[y0:y1,x0:x1,:]).show()
+
             face_encodings.append(encodings)
             print(f"face encoding shape: {encodings.shape}, face_cut shape: {face_cut[0].shape}")
             targets.append(face_cut[0])
@@ -293,12 +321,6 @@ class SuperSwapper:
         """
         assert self.find_best_match, "Find_best_match must be True to call findTarget"
         
-        # Stack attr_input and targets for computational efficiency.
-        #input_target_stack = torch.cat((self.tf(torch.Tensor(source_crop)[None].permute(0,3,1,2)),self.tf(torch.Tensor(target_crops).permute(0,3,1,2))),dim=0).to(self.device)
-        # Find best match:
-        #self.feature_embeddings = self.attr_model.get_embedding(input_target_stack)
-        plt.imshow(source_crop)
-        plt.show()
         input_face_encoding = face_recognition.face_encodings(source_crop.astype(np.uint8))[0]
         face_similarity = face_recognition.face_distance(self.targets_encoding,input_face_encoding)
         self.best_match_index = np.argmin(face_similarity)
@@ -441,7 +463,7 @@ if __name__=="__main__":
                     enhance_background=opt.enhance_background,
                     match_index=opt.match_index)
     end = time.monotonic()
-    print("Time taken to initialize: {} seconds".format(end-start))
+    print(f"Time taken to initialize: {(end-start):4e} seconds")
     start = time.monotonic()
     
     final_crop, target_img,non_enhanced = swapper.swapAndEnhance(opt.source)
